@@ -14,11 +14,7 @@ int compare(const void * a, const void * b);
 void Print(vector<int>& values);
 void PrintChrono(double &duration, int qty);
 
-//TODO:
-//CHRONO
-//Output chrono
-
-int main()
+int main(int argc, char* argv[])
 {
 	high_resolution_clock::time_point startTime = high_resolution_clock::now();
 
