@@ -17,7 +17,7 @@ void quicksort(vector<int>& values);
 int compare(const void * a, const void * b);
 
 //Hquicksort
-void GetSubArraysPos(int* pos[], int valuesSize, int qty);
+// vector< vector<int> > GetSubArraysPos(int valuesSize, int qty);
 void HyperQSort();		//Temp signature
 
 //outputs
@@ -28,11 +28,13 @@ int d;
 int p;
 int idle;
 vector<int> values;
+int arraySize;
+int subArraySize;
+
+
 
 int main(int argc, char* argv[])
-{
-
-		
+{		
 	int mpiRank; 
 	int mpiSize;
 
@@ -40,40 +42,90 @@ int main(int argc, char* argv[])
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank);
 	MPI_Comm_size(MPI_COMM_WORLD, &mpiSize);
 	
-	//REFACTOR: Organize code in different methods --------------------------
+	double startTime;
 	
+	d = log2(mpiSize);		
+	p = pow(2, d);					//Number of sorting processes
+	idle = mpiSize - p;				//number of idle processes 
+	
+	vector < vector<int> > pos;		//Input is stored in this vector.
+	
+	int transferDataSize;			
+	
+	
+	//EXAMPLE ON HOW TO CREATE GROUPS: -----------------
+	// Obtain the group of processes in the world communicator
+	// MPI_Group world_group;
+// 	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
+//
+// 	// Remove all unnecessary ranks
+// 	MPI_Group new_group;
+// 	int ranges[3] = { process_limit, size-1, 1 };
+// 	MPI_Group_range_excl(world_group, 1, ranges, &new_group);
+//
+// 	// Create a new communicator
+// 	MPI_Comm newworld;
+// 	MPI_Comm_create(MPI_COMM_WORLD, new_group, &newworld);
+
+		
+		
+		
+	//REFACTOR: Organize code in different methods --------------------------
+
 	
 	if (mpiRank == 0)
 	{
 		//STEP0: Start Chrono
-		double startTime = MPI_Wtime();
-		
-		d = log2(mpiSize);		//TODO: is P0 part of the hypercube?
-		p = pow(2, d);			//Number of sorting processes
-		idle = mpiSize - p;		//number of idle processes 
-
-		//positions is an array of array[2] containing beginning and end of sub array.
-		int* positions[p];
-		GetSubArraysPos(positions, values.size(), p);
-	
-		cout << positions[0][0] << positions[0][1] << endl;
-	
+		startTime = MPI_Wtime();
 	
 		//STEP1: Read input
 		values = LoadFromFile();
+		arraySize = values.size();
+		
+		// pos = GetSubArraysPos(values.size(), p);
+
+		// MPI_Send(&values[pos[currentP][0]], transferDataSize, MPI_INT, currentP, 0, MPI_COMM_WORLD);
+
+		//STEP3: Select and distribute pivot
 		int pivot0 = values[0];		//Arbitrary pivot
+		//TODO: Broadcast Pivot! SORT BEFORE??
 		
-		//STEP2: Distribute data
-		int currentP = 0;
-		while (currentP < p)		//PERF: Use Boradcast!!
-		{
-			int size = positions[currentP][1] - positions[currentP][0];
-			// MPI_Send(&values[currentP][0], size, MPI_INT, id, 0, MPI_COMM_WORLD);
-			++currentP;
-		}
+	}
+	
+	//PERF: work with an array from beginning instead of transforming vector into array
+	int valuesArray[values.size()];
+	if(mpiRank == 0)
+	{
+		copy(values.begin(), values.end(), valuesArray);
+	}
+	
+	//STEP2: Scatter values
+	//TODO: ScatterV in order to distribute all values!!
+	MPI_Bcast(&arraySize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	subArraySize = arraySize / p;
+	int subValues[subArraySize];
+	
+	if (mpiRank !=0)
+	{
+		cout << "arraySize: " << arraySize << endl;
+		cout << "subArraySize: " << subArraySize << endl;
+	}
+
+	MPI_Scatter(&valuesArray, subArraySize, MPI_INT, subValues , subArraySize, MPI_INT, 0, MPI_COMM_WORLD);
+	cout << "toSend 0 of rank " << mpiRank << " : " << subValues[0] << endl;	
+	
+	//TOREMOVE: checking values. That's all.
+	int j = 0;
+	while (j < 10)
+	{
+		cout << "toSend all values of rank " << mpiRank << " : " << subValues[j] << endl;		
+		++j;			
+	}
 		
-		// HyperQSort(&values[0], values.size());
-		
+	//void HyperQSort();	
+
+	if (mpiRank == 0)
+	{
 		//STEPX: Stop chrono and print results
 		double endTime = MPI_Wtime();
 		double duration = endTime - startTime;
@@ -83,13 +135,6 @@ int main(int argc, char* argv[])
 		Print(values);
 		PrintChrono(mpiSize, values.size(), duration);
 	}
-
-	if (mpiRank != 0)
-	{
-		//TODO
-	}
-		
-	//void HyperQSort();	
 
 	MPI_Finalize();
 	return 0;
@@ -150,23 +195,27 @@ void HyperQSort(int array[], int arraySize)
 	
 }
 
-void GetSubArraysPos(int* pos[], int valuesSize, int processes)
-{
-	int i = 0;
-	int arraySize = valuesSize / processes;
-	
-	while (i < processes)
-		{
-			//each value of pos is the position of the beginning and end of each subarray
-			int arrayLimits[2];
-			arrayLimits[0] = i * arraySize;			//Starting position
-			arrayLimits[1] = i == (processes - 1)	//Ending postion. Last p contains remaining values.
-				? valuesSize - 1
-				: arrayLimits[0] + arraySize;
-			pos[i] = arrayLimits;
-			++i;
-		}
-}
+//TOREMOVE: Not usefull anymore!!!!!!!!!!!!!!!!!!!!
+// vector< vector<int> > GetSubArraysPos(int valuesSize, int processes)
+// {
+// 	int i = 0;
+// 	arraySize = valuesSize / p;
+// 	vector< vector<int> > pos;
+// 	pos.resize( p , vector<int>(2) );
+//
+// 	while (i < p)
+// 		{
+// 			//each value of pos is the position of the beginning and end of each subarray
+// 			pos[i][0] =  i * arraySize;
+// 			pos[i][1] = i == (p - 1)	//Ending postion. Last p contains remaining values.
+// 				? valuesSize - 1
+// 				: pos[i][0] + arraySize - 1;
+// 			cout << "pos[" << i << "]: " <<  pos[i][0] << " | " << pos[i][1] << endl;
+// 			++i;
+// 		}
+//
+// 	return pos;
+// }
 
 
 //Helpers, output and serial operations --------------------------
