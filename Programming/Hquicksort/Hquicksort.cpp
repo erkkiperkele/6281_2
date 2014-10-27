@@ -32,6 +32,12 @@ int arraySize;
 int subArraySize;
 
 
+//TODO:
+//Use ScatterV
+//Broadcast pivot
+//Sort and echange
+//Create a group with only a multiple of 8 processes
+//Create smaller groups for dividing among the hypercube.
 
 int main(int argc, char* argv[])
 {		
@@ -82,9 +88,12 @@ int main(int argc, char* argv[])
 		values = LoadFromFile();
 		arraySize = values.size();
 		
-		// pos = GetSubArraysPos(values.size(), p);
-
-		// MPI_Send(&values[pos[currentP][0]], transferDataSize, MPI_INT, currentP, 0, MPI_COMM_WORLD);
+		
+		// //SEND remaining values to last process.
+// 		int remainingVSize = values.size() % p;
+// 		int remainingValues[remainingVSize];
+// 		copy(values.end() - remainingVSize, values.end(), remainingValues);
+// 		MPI_Send(&remainingValues, remainingVSize, MPI_INT, p-1, 0, MPI_COMM_WORLD);
 
 		//STEP3: Select and distribute pivot
 		int pivot0 = values[0];		//Arbitrary pivot
@@ -111,8 +120,26 @@ int main(int argc, char* argv[])
 		cout << "subArraySize: " << subArraySize << endl;
 	}
 
+
+	//TODO: Need to define groups. At the moment idle processors receive values!!!!
 	MPI_Scatter(&valuesArray, subArraySize, MPI_INT, subValues , subArraySize, MPI_INT, 0, MPI_COMM_WORLD);
 	cout << "toSend 0 of rank " << mpiRank << " : " << subValues[0] << endl;	
+	
+	// //last process receives remaining values.
+// 	if (mpiRank == p-1 && arraySize % p > 0)
+// 	{
+// 		int remainingValues[arraySize % p];
+// 		MPI_Recv(&remainingValues, arraySize % p, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//
+// 		//need to merge arrays! or use scatterV
+//
+// 		int i = 0;
+// 		while (i < arraySize % p)
+// 		{
+// 			cout << "remaining: " << remainingValues[i] << endl;
+// 			++i;
+// 		}
+// 	}
 	
 	//TOREMOVE: checking values. That's all.
 	int j = 0;
