@@ -41,40 +41,64 @@ int subArraySize;
 
 int main(int argc, char* argv[])
 {		
+	int mpiWorldRank;
+	int mpiWorldSize;
+	 
 	int mpiRank; 
 	int mpiSize;
 
 	MPI_Init(&argc, &argv);
-	MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank);
-	MPI_Comm_size(MPI_COMM_WORLD, &mpiSize);
+	
+	MPI_Comm_rank(MPI_COMM_WORLD, &mpiWorldRank);
+	MPI_Comm_size(MPI_COMM_WORLD, &mpiWorldSize);
+	
+	
 	
 	double startTime;
 	
-	d = log2(mpiSize);		
+	d = log2(mpiWorldSize);		
 	p = pow(2, d);					//Number of sorting processes
-	idle = mpiSize - p;				//number of idle processes 
+	idle = mpiWorldSize - p;				//number of idle processes 
+	int toExclude[idle];			//idle processes to exclude
+	
+	int i = 0;
+	while (i < idle)
+	{
+		toExclude[i] = mpiWorldSize - 1 - i;
+		++i;
+	}
+	
+	
 	
 	vector < vector<int> > pos;		//Input is stored in this vector.
 	
-	int transferDataSize;			
+	int transferDataSize;		
 	
-	
-	//EXAMPLE ON HOW TO CREATE GROUPS: -----------------
+	//CREATING HYPERCUBE GROUP: Group of size of power of 2 -----------------
 	// Obtain the group of processes in the world communicator
-	// MPI_Group world_group;
-// 	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
-//
-// 	// Remove all unnecessary ranks
-// 	MPI_Group new_group;
-// 	int ranges[3] = { process_limit, size-1, 1 };
-// 	MPI_Group_range_excl(world_group, 1, ranges, &new_group);
-//
-// 	// Create a new communicator
-// 	MPI_Comm newworld;
-// 	MPI_Comm_create(MPI_COMM_WORLD, new_group, &newworld);
+	MPI_Group world_group;
+	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
 
-		
-		
+	// Remove all unnecessary ranks
+	MPI_Group newGroup;
+	MPI_Group_excl(world_group, 1, toExclude, &newGroup);
+
+	// Create a new communicator
+	MPI_Comm MPI_COMM_HYPERCUBE;
+	MPI_Comm_create(MPI_COMM_WORLD, newGroup, &MPI_COMM_HYPERCUBE);
+	
+	if (mpiWorldRank < p)
+	{
+		MPI_Comm_rank(MPI_COMM_HYPERCUBE, &mpiRank);
+		MPI_Comm_size(MPI_COMM_HYPERCUBE, &mpiSize);
+	}	
+	//Abort any processor not part of the hypercube.
+	else
+	{
+		cout << "aborting: " << mpiWorldRank <<endl;
+		MPI_Finalize();
+		return 0;
+	}
 		
 	//REFACTOR: Organize code in different methods --------------------------
 
@@ -110,7 +134,8 @@ int main(int argc, char* argv[])
 	
 	//STEP2: Scatter values
 	//TODO: ScatterV in order to distribute all values!!
-	MPI_Bcast(&arraySize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	//TODO: Need to define groups. At the moment idle processors receive values!!!!
+	MPI_Bcast(&arraySize, 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
 	subArraySize = arraySize / p;
 	int subValues[subArraySize];
 	
@@ -120,9 +145,7 @@ int main(int argc, char* argv[])
 		cout << "subArraySize: " << subArraySize << endl;
 	}
 
-
-	//TODO: Need to define groups. At the moment idle processors receive values!!!!
-	MPI_Scatter(&valuesArray, subArraySize, MPI_INT, subValues , subArraySize, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Scatter(&valuesArray, subArraySize, MPI_INT, subValues , subArraySize, MPI_INT, 0, MPI_COMM_HYPERCUBE);
 	cout << "toSend 0 of rank " << mpiRank << " : " << subValues[0] << endl;	
 	
 	// //last process receives remaining values.
