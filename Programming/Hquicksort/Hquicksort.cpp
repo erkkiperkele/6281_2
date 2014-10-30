@@ -83,13 +83,13 @@ int main(int argc, char* argv[])
 	if (idle > 0)
 	{
 		MPI_Group newGroup;		
-		MPI_Group_excl(world_group, 1, toExclude, &newGroup);
+		MPI_Group_excl(world_group, idle, toExclude, &newGroup);
 
 		// Create a new communicator
 		MPI_Comm_create(MPI_COMM_WORLD, newGroup, &MPI_COMM_HYPERCUBE);
 
 		//Abort any processor not part of the hypercube.	
-		if (mpiWorldRank > p)
+		if (mpiWorldRank >= p)
 		{
 			cout << "aborting: " << mpiWorldRank <<endl;
 			MPI_Finalize();
@@ -127,16 +127,7 @@ int main(int argc, char* argv[])
 		
 	}
 	
-	//PERF: work with an array from beginning instead of transforming vector into array
-	int valuesArray[values.size()];
-	if(mpiRank == 0)
-	{
-		copy(values.begin(), values.end(), valuesArray);
-	}
-	
 	//STEP2: Scatter values
-	//TODO: ScatterV in order to distribute all values!!
-	//TODO: Need to define groups. At the moment idle processors receive values!!!!
 	MPI_Bcast(&arraySize, 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
 	cout << "rank " << mpiRank << " - array size broadcasted: " << arraySize << endl;
 
@@ -175,7 +166,8 @@ int main(int argc, char* argv[])
 	// cout << "rank " << mpiRank << " recvCount " << recvCount << endl;
 
 	//ROOT FAILS AT RECEIVING ITS OWN VALUES!! Both on a duplicated communicator or a created one.
-	MPI_Scatterv(&valuesArray, sendCounts, displs, MPI_INT, recvValues , recvCount, MPI_INT, 0, MPI_COMM_HYPERCUBE);
+	// MPI_Scatterv(&valuesArray, sendCounts, displs, MPI_INT, recvValues , recvCount, MPI_INT, 0, MPI_COMM_HYPERCUBE);
+	MPI_Scatterv(&values[0], sendCounts, displs, MPI_INT, recvValues , recvCount, MPI_INT, 0, MPI_COMM_HYPERCUBE);
 
 	
 	
