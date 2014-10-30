@@ -137,9 +137,6 @@ int main(int argc, char* argv[])
 			: nmin;
         displs[i] = k;
 		k += sendCounts[i];
-		
-		cout << "rank " << mpiRank << " sendCounts [" << i << "]: " << sendCounts[i] << endl;
-		cout << "rank " << mpiRank << " displs [" << i << "]: " << displs[i] << endl;
     }
 
 	recvCount = sendCounts[mpiRank];
@@ -160,8 +157,6 @@ int main(int argc, char* argv[])
 	if (mpiRank == 0)
 	{
 		//STEPX: Stop chrono and print results
-
-	
 		double endTime = MPI_Wtime();
 		double duration = endTime - startTime;
 
