@@ -113,13 +113,6 @@ int main(int argc, char* argv[])
 		//STEP1: Read input
 		values = LoadFromFile();
 		arraySize = values.size();
-		
-		
-		// //SEND remaining values to last process.
-// 		int remainingVSize = values.size() % p;
-// 		int remainingValues[remainingVSize];
-// 		copy(values.end() - remainingVSize, values.end(), remainingValues);
-// 		MPI_Send(&remainingValues, remainingVSize, MPI_INT, p-1, 0, MPI_COMM_WORLD);
 
 		//STEP3: Select and distribute pivot
 		int pivot0 = values[0];		//Arbitrary pivot
@@ -130,14 +123,6 @@ int main(int argc, char* argv[])
 	//STEP2: Scatter values
 	MPI_Bcast(&arraySize, 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
 	cout << "rank " << mpiRank << " - array size broadcasted: " << arraySize << endl;
-
-	// int subValues[subArraySize];
-	
-	// if (mpiRank !=0)
-// 	{
-// 		cout << "arraySize: " << arraySize << endl;
-// 		cout << "subArraySize: " << subArraySize << endl;
-// 	}
 
     int nmin = arraySize / p;
 	int remainingData = arraySize % p;
@@ -159,37 +144,7 @@ int main(int argc, char* argv[])
 
 	recvCount = sendCounts[mpiRank];
 	int recvValues[recvCount];
-			
-	// MPI_Scatter(&valuesArray, 13, MPI_INT, recvValues , 13, MPI_INT, 0, MPI_COMM_HYPERCUBE);
-	
-	// cout << "rank " << mpiRank << " recvValues[0] " << recvValues[0] << endl;
-	// cout << "rank " << mpiRank << " recvCount " << recvCount << endl;
-
-	//ROOT FAILS AT RECEIVING ITS OWN VALUES!! Both on a duplicated communicator or a created one.
-	// MPI_Scatterv(&valuesArray, sendCounts, displs, MPI_INT, recvValues , recvCount, MPI_INT, 0, MPI_COMM_HYPERCUBE);
 	MPI_Scatterv(&values[0], sendCounts, displs, MPI_INT, recvValues , recvCount, MPI_INT, 0, MPI_COMM_HYPERCUBE);
-
-	
-	
-	// MPI_Scatterv(&table[0][0], send_counts, displs, MPI_INT, &row[0] , recv_count, MPI_INT, 0, MPI_COMM_WORLD);
-	// MPI_Scatter(&table[0][0], send_count,           MPI_INT, &row[0] , recv_count, MPI_INT, 0, MPI_COMM_WORLD);
-	// cout << "rank " << mpiRank << " receiving: " << recvValues[0] << endl;
-	
-	// //last process receives remaining values.
-// 	if (mpiRank == p-1 && arraySize % p > 0)
-// 	{
-// 		int remainingValues[arraySize % p];
-// 		MPI_Recv(&remainingValues, arraySize % p, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-//
-// 		//need to merge arrays! or use scatterV
-//
-// 		int i = 0;
-// 		while (i < arraySize % p)
-// 		{
-// 			cout << "remaining: " << remainingValues[i] << endl;
-// 			++i;
-// 		}
-// 	}
 	
 	//TOREMOVE: checking values. That's all.
 	int j = 0;
@@ -201,9 +156,12 @@ int main(int argc, char* argv[])
 		
 	//void HyperQSort();	
 
+	MPI_Barrier(MPI_COMM_HYPERCUBE);
 	if (mpiRank == 0)
 	{
 		//STEPX: Stop chrono and print results
+
+	
 		double endTime = MPI_Wtime();
 		double duration = endTime - startTime;
 
