@@ -29,7 +29,7 @@ int p;
 int idle;
 vector<int> values;
 int arraySize;
-int subArraySize;
+
 
 
 //TODO:
@@ -51,15 +51,16 @@ int main(int argc, char* argv[])
 	
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpiWorldRank);
 	MPI_Comm_size(MPI_COMM_WORLD, &mpiWorldSize);
-	
+	MPI_Comm MPI_COMM_HYPERCUBE;
 	
 	
 	double startTime;
 	
 	d = log2(mpiWorldSize);		
 	p = pow(2, d);					//Number of sorting processes
-	idle = mpiWorldSize - p;				//number of idle processes 
+	idle = mpiWorldSize - p;		//number of idle processes 
 	int toExclude[idle];			//idle processes to exclude
+	int sendCounts[p];				//array of values sizes to be sent to processes
 	
 	int i = 0;
 	while (i < idle)
@@ -67,7 +68,6 @@ int main(int argc, char* argv[])
 		toExclude[i] = mpiWorldSize - 1 - i;
 		++i;
 	}
-	
 	
 	
 	vector < vector<int> > pos;		//Input is stored in this vector.
@@ -80,26 +80,28 @@ int main(int argc, char* argv[])
 	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
 
 	// Remove all unnecessary ranks
-	MPI_Group newGroup;
-	MPI_Group_excl(world_group, 1, toExclude, &newGroup);
+	if (idle > 0)
+	{
+		MPI_Group newGroup;		
+		MPI_Group_excl(world_group, 1, toExclude, &newGroup);
 
-	// Create a new communicator
-	MPI_Comm MPI_COMM_HYPERCUBE;
-	MPI_Comm_create(MPI_COMM_WORLD, newGroup, &MPI_COMM_HYPERCUBE);
-	
-	if (mpiWorldRank < p)
-	{
-		MPI_Comm_rank(MPI_COMM_HYPERCUBE, &mpiRank);
-		MPI_Comm_size(MPI_COMM_HYPERCUBE, &mpiSize);
+		// Create a new communicator
+		MPI_Comm_create(MPI_COMM_WORLD, newGroup, &MPI_COMM_HYPERCUBE);
+
+		//Abort any processor not part of the hypercube.	
+		if (mpiWorldRank > p)
+		{
+			cout << "aborting: " << mpiWorldRank <<endl;
+			MPI_Finalize();
+			return 0;
+		}	
 	}	
-	//Abort any processor not part of the hypercube.
-	else
+	else 
 	{
-		cout << "aborting: " << mpiWorldRank <<endl;
-		MPI_Finalize();
-		return 0;
+		MPI_Comm_dup(MPI_COMM_WORLD, &MPI_COMM_HYPERCUBE);
 	}
-		
+	MPI_Comm_rank(MPI_COMM_HYPERCUBE, &mpiRank);
+	MPI_Comm_size(MPI_COMM_HYPERCUBE, &mpiSize);
 	//REFACTOR: Organize code in different methods --------------------------
 
 	
@@ -136,17 +138,50 @@ int main(int argc, char* argv[])
 	//TODO: ScatterV in order to distribute all values!!
 	//TODO: Need to define groups. At the moment idle processors receive values!!!!
 	MPI_Bcast(&arraySize, 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
-	subArraySize = arraySize / p;
-	int subValues[subArraySize];
-	
-	if (mpiRank !=0)
-	{
-		cout << "arraySize: " << arraySize << endl;
-		cout << "subArraySize: " << subArraySize << endl;
-	}
+	cout << "rank " << mpiRank << " - array size broadcasted: " << arraySize << endl;
 
-	MPI_Scatter(&valuesArray, subArraySize, MPI_INT, subValues , subArraySize, MPI_INT, 0, MPI_COMM_HYPERCUBE);
-	cout << "toSend 0 of rank " << mpiRank << " : " << subValues[0] << endl;	
+	// int subValues[subArraySize];
+	
+	// if (mpiRank !=0)
+// 	{
+// 		cout << "arraySize: " << arraySize << endl;
+// 		cout << "subArraySize: " << subArraySize << endl;
+// 	}
+
+    int nmin = arraySize / p;
+	int remainingData = arraySize % p;
+	int displs[p];
+	int recvCount;
+
+    int k = 0;
+    for (i=0; i<p; i++)
+    {
+		sendCounts[i] = i < remainingData
+			? nmin+1
+			: nmin;
+        displs[i] = k;
+		k += sendCounts[i];
+		
+		cout << "rank " << mpiRank << " sendCounts [" << i << "]: " << sendCounts[i] << endl;
+		cout << "rank " << mpiRank << " displs [" << i << "]: " << displs[i] << endl;
+    }
+
+	recvCount = sendCounts[mpiRank];
+	int recvValues[recvCount];
+			
+	// MPI_Scatter(&valuesArray, 13, MPI_INT, recvValues , 13, MPI_INT, 0, MPI_COMM_HYPERCUBE);
+	
+	// cout << "rank " << mpiRank << " recvValues[0] " << recvValues[0] << endl;
+	// cout << "rank " << mpiRank << " recvCount " << recvCount << endl;
+
+	//ROOT FAILS AT RECEIVING ITS OWN VALUES!! Both on a duplicated communicator or a created one.
+	MPI_Scatterv(&valuesArray, sendCounts, displs, MPI_INT, recvValues , recvCount, MPI_INT, 0, MPI_COMM_HYPERCUBE);
+
+	
+	
+	// MPI_Scatterv(&table[0][0], send_counts, displs, MPI_INT, &row[0] , recv_count, MPI_INT, 0, MPI_COMM_WORLD);
+	// MPI_Scatter(&table[0][0], send_count,           MPI_INT, &row[0] , recv_count, MPI_INT, 0, MPI_COMM_WORLD);
+	// cout << "rank " << mpiRank << " receiving: " << recvValues[0] << endl;
 	
 	// //last process receives remaining values.
 // 	if (mpiRank == p-1 && arraySize % p > 0)
@@ -166,10 +201,10 @@ int main(int argc, char* argv[])
 	
 	//TOREMOVE: checking values. That's all.
 	int j = 0;
-	while (j < 10)
+	while (j < recvCount)
 	{
-		cout << "toSend all values of rank " << mpiRank << " : " << subValues[j] << endl;		
-		++j;			
+		cout << "rank " << mpiRank << " received: " << recvValues[j] << endl;
+		++j;
 	}
 		
 	//void HyperQSort();	
