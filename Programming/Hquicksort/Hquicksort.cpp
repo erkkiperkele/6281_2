@@ -17,8 +17,8 @@ void quicksort(vector<int>& values);
 int compare(const void * a, const void * b);
 
 //Hquicksort
-void HyperQSort(int currentd);
-void SplitList(int* valueSet, int valueSetSize, int pivot);
+void HyperQSort(int currentd, int* currentValues, int currentValuesSize);
+void SplitList(vector<int> &lower, vector<int> &upper, int* valueSet, int valueSetSize, int pivot);
 
 //outputs
 void Print(vector<int>& values);
@@ -113,19 +113,21 @@ int main(int argc, char* argv[])
 	int recvValues[recvCount];
 	MPI_Scatterv(&values[0], sendCounts, displs, MPI_INT, recvValues , recvCount, MPI_INT, 0, MPI_COMM_HYPERCUBE);
 	
-	//TOREMOVE: checking values. That's all.
-	int j = 0;
-	while (j < recvCount)
-	{
-		cout << "rank " << mpiRank << " received: " << recvValues[j] << endl;
-		++j;
-	}
+	// //TOREMOVE: checking values. That's all.
+	// int j = 0;
+	// while (j < recvCount)
+	// {
+	// 	cout << "rank " << mpiRank << " received: " << recvValues[j] << endl;
+	// 	++j;
+	// }
 			
 	//STEP3: Compare and exchange
 	int currentd = 0;
+	int* currentValues = &recvValues[0];
+	int currentValuesSize = recvCount;
 	while (currentd < d)
 	{
-		HyperQSort(currentd);
+		HyperQSort(currentd, currentValues, currentValuesSize);
 		++currentd;
 	}
 
@@ -146,64 +148,91 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-void HypercubeInit(int toExclude[])
+//TODO: Implement properly!
+vector<int> GetGroup(int currentd)
 {
-	//CREATING HYPERCUBE GROUP: Group of size of power of 2 -----------------
-	// Obtain the group of processes in the world communicator
-	MPI_Group world_group;
-	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
-
-	// Remove all unnecessary ranks
-	if (idle > 0)
-	{
-		MPI_Group newGroup;		
-		MPI_Group_excl(world_group, idle, toExclude, &newGroup);
-
-		// Create a new communicator
-		MPI_Comm_create(MPI_COMM_WORLD, newGroup, &MPI_COMM_HYPERCUBE);
-	}	
-	else 
-	{
-		MPI_Comm_dup(MPI_COMM_WORLD, &MPI_COMM_HYPERCUBE);
-	}
+	vector<int> group;
+	int step = p / pow(2,currentd);
 	
-	//PERF: Should create all hypercube's subgroups
+	int size = mpiRank / step;
+	int start = step * size;
+	int end = start + step;
+	while (start < end)
+	{
+		group.push_back(start);
+		++start;
+	}
+	return group;
 }
 
-void SplitList(int* valueSet, int valueSetSize, int pivot)
+
+void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 {
-	vector<int> lower;
-	vector<int> upper;
-	
+	//STEP3: Select pivot and Broadcast	
+	vector<int> myGroup = GetGroup(currentd);
+	int broadcaster = myGroup[0];
+
+	int sendSize = (p / (pow(2,currentd)));		//Send pivot to n processes
+
+	//Check every bit to determine the broadcaster. 
+	//(Ex: 000 has none of its 3 bits set, and is broadcaster of dimension 0)
+	//(Ex: 100 has none of its 2 last bits set and is broadcaster of dimension 3-1 = 2) etc...
+	bool isBroadcaster = true;
 	int i = 0;
-	while (i < valueSetSize)
+	while ((i < d - currentd) && isBroadcaster)
 	{
-		bool isLower = valueSet[i] < pivot;
-		if (isLower)
+		if ((mpiRank & (1<<i)))
 		{
-			lower.push_back(valueSet[i]);
-			return;
+			isBroadcaster = false;
 		}
-		upper.push_back(valueSet[i]);
 		++i;
 	}
-	//DO Something with it...
-	//More elegant way to do it...
-}
-
-void HyperQSort(int currentd)
-{
-	//FOR THE MOMENT, 3 dimensions only max (support 2 also)
-	//Select pivot and broadcast
-	if (currentd == 0 && mpiRank == 0)
+	
+	if(isBroadcaster)
 	{
-		pivot = values[0];
+		pivot = (currentValues[0] + currentValues[currentValuesSize-1]) / 2;
+		int i = 1;
+		while(i < sendSize)
+		{
+			int receiver = myGroup[i];
+			MPI_Send(&pivot, 1, MPI_INT, receiver, 0, MPI_COMM_HYPERCUBE);
+			++i;
+		}	
 	}
-	MPI_Bcast(&pivot, 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
-	cout << "rank " << mpiRank << " received pivot: " << pivot << endl;
 	
+	else
+	{
+		MPI_Recv(&pivot, 1, MPI_INT, broadcaster, 0, MPI_COMM_HYPERCUBE, MPI_STATUS_IGNORE);	
+	}
+	// cout << "rank " << mpiRank << " receive pivot " << pivot << " from: " << broadcaster << endl;
+
 	
-	//Split values in 2
+	//STEP4: Split values in 2
+	vector<int> lower;
+	vector<int> upper;
+	//TEST
+	if (currentd == 0)
+	{
+		SplitList(lower, upper, currentValues, currentValuesSize, pivot);		
+	}
+
+	//VERIF ONLY:
+	int l = 0;
+	if (mpiRank == 0)
+	{
+		while (l < lower.size())
+		{
+			cout << lower[l] << endl;
+			++l;
+		}
+		cout << "upper than: " << pivot << endl;
+		int u = 0;
+		while (u < upper.size())
+		{
+			cout << upper[u] << endl;
+			++u;
+		}
+	}
 	
 	//Echange data with neighbour
 	
@@ -233,11 +262,58 @@ void HyperQSort(int currentd)
 	//first time to all, 
 	//then to ones with same most significant bit, 
 	//then to one with same most significant 2 bits, etc....
-	
-	
-
-	
+	MPI_Barrier(MPI_COMM_HYPERCUBE);
 }
+
+void HypercubeInit(int toExclude[])
+{
+	//CREATING HYPERCUBE GROUP: Group of size of power of 2 -----------------
+	// Obtain the group of processes in the world communicator
+	MPI_Group world_group;
+	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
+
+	// Remove all unnecessary ranks
+	if (idle > 0)
+	{
+		MPI_Group newGroup;		
+		MPI_Group_excl(world_group, idle, toExclude, &newGroup);
+
+		// Create a new communicator
+		MPI_Comm_create(MPI_COMM_WORLD, newGroup, &MPI_COMM_HYPERCUBE);
+	}	
+	else 
+	{
+		MPI_Comm_dup(MPI_COMM_WORLD, &MPI_COMM_HYPERCUBE);
+	}
+	
+	//PERF: Should create all hypercube's subgroups
+}
+
+void SplitList(vector<int> &lower, vector<int> &upper, int* valueSet, int valueSetSize, int pivot)
+{
+	// cout << "valueSetSize " << valueSetSize << endl;
+	// cout << "pivot " << pivot << endl;
+	int i = 0;
+	while (i < valueSetSize)
+	{
+		// cout << "value compared to " << valueSet[i] << endl;
+		bool isLower = valueSet[i] < pivot;
+		if (isLower)
+		{
+			// cout << "lower receives " << valueSet[i] << endl;
+			lower.push_back(valueSet[i]);
+		}
+		else
+		{
+			upper.push_back(valueSet[i]);			
+		}
+		++i;
+	}
+	//DO Something with it...
+	//More elegant way to do it...
+}
+
+
 
 //Helpers, output and serial operations --------------------------
 
