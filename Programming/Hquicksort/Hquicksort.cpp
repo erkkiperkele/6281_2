@@ -41,6 +41,8 @@ vector<int> values;
 int arraySize;
 
 int pivot;
+int* currentValues;
+int currentValuesSize;
 
 //TODO:
 //Use ScatterV
@@ -123,8 +125,9 @@ int main(int argc, char* argv[])
 			
 	//STEP3: Compare and exchange
 	int currentd = 0;
-	int* currentValues = &recvValues[0];
-	int currentValuesSize = recvCount;
+	// int sortingArray[arraySize];
+	currentValues = &recvValues[0];
+	currentValuesSize = recvCount;
 	while (currentd < d)
 	{
 		HyperQSort(currentd, currentValues, currentValuesSize);
@@ -234,24 +237,26 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 		}
 	}
 	
-	//Echange data with neighbour
+	//STEP5: Echange data with neighbour
 	
-	// 	int destId = mpiRank ^ pow(2, i);
-	//
-	// 	if (rank & (1<<i))	//checks if nth bit is set
-	// 	{
-	// 		//send lower
-	// 		//receive from upper
-	// 		//array = arrayU U receivedArray
-	// 	}
-	// 	else
-	// 	{
-	// 		//send upper
-	// 		//etc...
-	// 	}
-	// 	++i;
-	// }
+	int power = pow(2, currentd);
+	int destId = mpiRank ^ power;
+	int maxSize = arraySize/p +1;
+	int received[maxSize];
 	
+	
+	MPI_Request sendRequest;
+	MPI_Request recvRequest;
+	
+	int* toSend = mpiRank & (1<<i)
+		? &lower[0]
+		: &upper[0];
+	
+	cout << "dimension: " << currentd << " rank: " << mpiRank << " send to destId: " << destId << endl;
+	MPI_Isend(toSend, lower.size(), MPI_INT, destId, 0, MPI_COMM_HYPERCUBE, &sendRequest);
+	MPI_Irecv(&received[0], maxSize, MPI_INT, destId, 0, MPI_COMM_HYPERCUBE, &recvRequest);
+	cout << "rank: " << mpiRank << " receive from destId: " << destId << endl;
+
 	//exit and restart
 	
 	
