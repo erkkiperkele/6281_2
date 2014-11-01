@@ -18,11 +18,19 @@ int compare(const void * a, const void * b);
 
 //Hquicksort
 // vector< vector<int> > GetSubArraysPos(int valuesSize, int qty);
-void HyperQSort();		//Temp signature
+// void HyperQSort();		//Temp signature
+void SplitList(int* valueSet, int valueSetSize, int pivot);
 
 //outputs
 void Print(vector<int>& values);
 void PrintChrono(int &nodes, size_t qty, double &duration);
+
+int mpiWorldRank;
+int mpiWorldSize;
+MPI_Comm MPI_COMM_HYPERCUBE;
+ 
+int mpiRank; 
+int mpiSize;
 
 int d;
 int p;
@@ -30,7 +38,7 @@ int idle;
 vector<int> values;
 int arraySize;
 
-
+int pivot;
 
 //TODO:
 //Use ScatterV
@@ -38,25 +46,18 @@ int arraySize;
 //Sort and echange
 //Create a group with only a multiple of 8 processes
 //Create smaller groups for dividing among the hypercube.
+//remove global variable and pass it as parameters instead
 
 int main(int argc, char* argv[])
 {		
-	int mpiWorldRank;
-	int mpiWorldSize;
-	 
-	int mpiRank; 
-	int mpiSize;
-
+	//STEP0: initialize MPI, global variables and start chrono
 	MPI_Init(&argc, &argv);
-	
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpiWorldRank);
 	MPI_Comm_size(MPI_COMM_WORLD, &mpiWorldSize);
-	MPI_Comm MPI_COMM_HYPERCUBE;
+	double startTime = MPI_Wtime();
 	
-	
-	double startTime;
-	
-	d = log2(mpiWorldSize);		
+	//Processes infos
+	d = log2(mpiWorldSize);			//Hypercube dimension
 	p = pow(2, d);					//Number of sorting processes
 	idle = mpiWorldSize - p;		//number of idle processes 
 	int toExclude[idle];			//idle processes to exclude
@@ -68,11 +69,6 @@ int main(int argc, char* argv[])
 		toExclude[i] = mpiWorldSize - 1 - i;
 		++i;
 	}
-	
-	
-	vector < vector<int> > pos;		//Input is stored in this vector.
-	
-	int transferDataSize;		
 	
 	//CREATING HYPERCUBE GROUP: Group of size of power of 2 -----------------
 	// Obtain the group of processes in the world communicator
@@ -102,27 +98,19 @@ int main(int argc, char* argv[])
 	}
 	MPI_Comm_rank(MPI_COMM_HYPERCUBE, &mpiRank);
 	MPI_Comm_size(MPI_COMM_HYPERCUBE, &mpiSize);
-	//REFACTOR: Organize code in different methods --------------------------
-
 	
+	
+	//STEP0: Read input (and start chrono)
 	if (mpiRank == 0)
 	{
-		//STEP0: Start Chrono
-		startTime = MPI_Wtime();
 	
 		//STEP1: Read input
 		values = LoadFromFile();
 		arraySize = values.size();
-
-		//STEP3: Select and distribute pivot
-		int pivot0 = values[0];		//Arbitrary pivot
-		//TODO: Broadcast Pivot! SORT BEFORE??
-		
 	}
 	
 	//STEP2: Scatter values
 	MPI_Bcast(&arraySize, 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
-	cout << "rank " << mpiRank << " - array size broadcasted: " << arraySize << endl;
 
     int nmin = arraySize / p;
 	int remainingData = arraySize % p;
@@ -150,8 +138,13 @@ int main(int argc, char* argv[])
 		cout << "rank " << mpiRank << " received: " << recvValues[j] << endl;
 		++j;
 	}
-		
-	//void HyperQSort();	
+			
+	int currentd = 0;
+	while (currentd < d)		//iterate through all dimensions of the cube
+	{
+		// HyperQSort(currentd);
+		++currentd;
+	}
 
 	MPI_Barrier(MPI_COMM_HYPERCUBE);
 	if (mpiRank == 0)
@@ -170,43 +163,52 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-void HyperQSort(int array[], int arraySize)
+// void SelectAndBroadCastPivot(int* values, int* broadcasters)
+// {
+// 	if (mpiRank == 0)
+// 	{
+// 		pivot = values[0];
+// 	}
+// 	MPI_Bcast(&pivot, 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
+// }
+
+void SplitList(int* valueSet, int valueSetSize, int pivot)
 {
-	//shall I create groups per dimensions? (1024 proc. is 10 groups only)
-	//pivot should be sent by lowest id of the group. p0 to all, then to 3, then to 1. (don't send to himself)
-	//first time to all, 
-	//then to ones with same most significant bit, 
-	//then to one with same most significant 2 bits, etc....
-	
+	vector<int> lower;
+	vector<int> upper;
 	
 	int i = 0;
-	// while (i < d)
-	// {
-	// 	if (mpiRank == 0)
-	// 	{
-	// 		//Arbitrary pivot value taken in the middle in case values are already ordered.
-	// 		int pivot = array[arraySize / 2];
-	//
-	// 		//broadcast pivot
-	// 	}
-	//
-	// 	vector<int> arrayL;
-	// 	vector<int> arrayU;
-	//
-	// 	int j = 0;
-	// 	while (j < arraySize)
-	// 	{
-	// 		if(array[j] <= pivot)
-	// 		{
-	// 			arrayL.push_back(array[j]);
-	// 		}
-	// 		else
-	// 		{
-	// 			arrayU.push_back(array[j]);
-	// 		}
-	// 		++j;
-	// 	}
-	//
+	while (i < valueSetSize)
+	{
+		bool isLower = valueSet[i] < pivot;
+		if (isLower)
+		{
+			lower.push_back(valueSet[i]);
+			return;
+		}
+		upper.push_back(valueSet[i]);
+		++i;
+	}
+	//DO Something with it...
+	//More elegant way to do it...
+}
+
+void HyperQSort(int currentd)
+{
+	//FOR THE MOMENT, 3 dimensions only max (support 2 also)
+	//Select pivot and broadcast
+	if (currentd == 0 && mpiRank == 0)
+	{
+		pivot = values[0];
+	}
+	MPI_Bcast(&pivot, 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
+	cout << "rank " << mpiRank << " received pivot: " << pivot << endl;
+	
+	
+	//Split values in 2
+	
+	//Echange data with neighbour
+	
 	// 	int destId = mpiRank ^ pow(2, i);
 	//
 	// 	if (rank & (1<<i))	//checks if nth bit is set
@@ -223,30 +225,21 @@ void HyperQSort(int array[], int arraySize)
 	// 	++i;
 	// }
 	
+	//exit and restart
+	
+	
+	
+	
+	//shall I create groups per dimensions? (1024 proc. is 10 groups only)
+	//pivot should be sent by lowest id of the group. p0 to all, then to 3, then to 1. (don't send to himself)
+	//first time to all, 
+	//then to ones with same most significant bit, 
+	//then to one with same most significant 2 bits, etc....
+	
+	
+
+	
 }
-
-//TOREMOVE: Not usefull anymore!!!!!!!!!!!!!!!!!!!!
-// vector< vector<int> > GetSubArraysPos(int valuesSize, int processes)
-// {
-// 	int i = 0;
-// 	arraySize = valuesSize / p;
-// 	vector< vector<int> > pos;
-// 	pos.resize( p , vector<int>(2) );
-//
-// 	while (i < p)
-// 		{
-// 			//each value of pos is the position of the beginning and end of each subarray
-// 			pos[i][0] =  i * arraySize;
-// 			pos[i][1] = i == (p - 1)	//Ending postion. Last p contains remaining values.
-// 				? valuesSize - 1
-// 				: pos[i][0] + arraySize - 1;
-// 			cout << "pos[" << i << "]: " <<  pos[i][0] << " | " << pos[i][1] << endl;
-// 			++i;
-// 		}
-//
-// 	return pos;
-// }
-
 
 //Helpers, output and serial operations --------------------------
 
