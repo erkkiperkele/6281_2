@@ -17,13 +17,15 @@ void quicksort(vector<int>& values);
 int compare(const void * a, const void * b);
 
 //Hquicksort
-// vector< vector<int> > GetSubArraysPos(int valuesSize, int qty);
-// void HyperQSort();		//Temp signature
+void HyperQSort(int currentd);
 void SplitList(int* valueSet, int valueSetSize, int pivot);
 
 //outputs
 void Print(vector<int>& values);
 void PrintChrono(int &nodes, size_t qty, double &duration);
+
+//communicator(s)
+void HypercubeInit(int toExclude[]);
 
 int mpiWorldRank;
 int mpiWorldSize;
@@ -70,41 +72,21 @@ int main(int argc, char* argv[])
 		++i;
 	}
 	
-	//CREATING HYPERCUBE GROUP: Group of size of power of 2 -----------------
-	// Obtain the group of processes in the world communicator
-	MPI_Group world_group;
-	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
-
-	// Remove all unnecessary ranks
-	if (idle > 0)
+	
+	HypercubeInit(toExclude);
+	//Abort any processor not part of the hypercube.	
+	if (mpiWorldRank >= p)
 	{
-		MPI_Group newGroup;		
-		MPI_Group_excl(world_group, idle, toExclude, &newGroup);
-
-		// Create a new communicator
-		MPI_Comm_create(MPI_COMM_WORLD, newGroup, &MPI_COMM_HYPERCUBE);
-
-		//Abort any processor not part of the hypercube.	
-		if (mpiWorldRank >= p)
-		{
-			cout << "aborting: " << mpiWorldRank <<endl;
-			MPI_Finalize();
-			return 0;
-		}	
+		cout << "aborting: " << mpiWorldRank <<endl;
+		MPI_Finalize();
+		return 0;
 	}	
-	else 
-	{
-		MPI_Comm_dup(MPI_COMM_WORLD, &MPI_COMM_HYPERCUBE);
-	}
 	MPI_Comm_rank(MPI_COMM_HYPERCUBE, &mpiRank);
 	MPI_Comm_size(MPI_COMM_HYPERCUBE, &mpiSize);
 	
-	
-	//STEP0: Read input (and start chrono)
+	//STEP1: Read input
 	if (mpiRank == 0)
 	{
-	
-		//STEP1: Read input
 		values = LoadFromFile();
 		arraySize = values.size();
 	}
@@ -139,10 +121,11 @@ int main(int argc, char* argv[])
 		++j;
 	}
 			
+	//STEP3: Compare and exchange
 	int currentd = 0;
-	while (currentd < d)		//iterate through all dimensions of the cube
+	while (currentd < d)
 	{
-		// HyperQSort(currentd);
+		HyperQSort(currentd);
 		++currentd;
 	}
 
@@ -163,14 +146,29 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-// void SelectAndBroadCastPivot(int* values, int* broadcasters)
-// {
-// 	if (mpiRank == 0)
-// 	{
-// 		pivot = values[0];
-// 	}
-// 	MPI_Bcast(&pivot, 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
-// }
+void HypercubeInit(int toExclude[])
+{
+	//CREATING HYPERCUBE GROUP: Group of size of power of 2 -----------------
+	// Obtain the group of processes in the world communicator
+	MPI_Group world_group;
+	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
+
+	// Remove all unnecessary ranks
+	if (idle > 0)
+	{
+		MPI_Group newGroup;		
+		MPI_Group_excl(world_group, idle, toExclude, &newGroup);
+
+		// Create a new communicator
+		MPI_Comm_create(MPI_COMM_WORLD, newGroup, &MPI_COMM_HYPERCUBE);
+	}	
+	else 
+	{
+		MPI_Comm_dup(MPI_COMM_WORLD, &MPI_COMM_HYPERCUBE);
+	}
+	
+	//PERF: Should create all hypercube's subgroups
+}
 
 void SplitList(int* valueSet, int valueSetSize, int pivot)
 {
