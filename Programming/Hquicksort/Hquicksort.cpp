@@ -258,7 +258,7 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 	MPI_Request recvRequest;
 	MPI_Status status;
 
-	bool isUpperKeeper = mpiRank & (1<<i);
+	bool isUpperKeeper = mpiRank & (1<<currentd);
 	int* toSend = isUpperKeeper
 		? &lower[0]
 		: &upper[0];
@@ -273,18 +273,18 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 	MPI_Get_count( &status, MPI_INT, &receivedSize );
 	
 	
-	// //VERIF ONLY:
-// 	int m = 0;
-// 	if (mpiRank == 0 && currentd == 0)
-// 	{
-// 		cout << "RECEIVED values: --------" << endl;
-// 		while (m < receivedSize)
-// 		{
-// 			cout << received[m] << endl;
-// 			++m;
-// 		}
-// 		cout << "END OF RECEIVED values: --------" << endl;
-// 	}
+	//VERIF ONLY:
+	int m = 0;
+	if (mpiRank == 0 && currentd == 0)
+	{
+		cout << "RECEIVED values: --------" << endl;
+		while (m < receivedSize)
+		{
+			cout << received[m] << endl;
+			++m;
+		}
+		cout << "END OF RECEIVED values: --------" << endl;
+	}
 	
 	//STEP6: merge data kept with data received
 	if (isUpperKeeper)
@@ -298,7 +298,8 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 	
 	if (mpiRank == 0 && currentd == 0)
 	{
-		cout << "MPI_get_count: " << receivedSize << endl;
+		cout << endl <<"MPI_get_count: " << receivedSize << endl;
+		cout << "destId :" << destId << endl;
 		cout << "MERGED values: --------" << endl;
 		int m = 0;
 		int size = isUpperKeeper
