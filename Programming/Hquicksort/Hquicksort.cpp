@@ -168,6 +168,15 @@ vector<int> GetGroup(int currentd)
 	return group;
 }
 
+void PushArrayToVector(vector<int> &toExtend, int* received, int receivedSize)
+{
+	int i = 0;
+	while (i < receivedSize)
+	{
+		toExtend.push_back(received[i]);
+		++i;
+	}
+}
 
 void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 {
@@ -214,15 +223,16 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 	vector<int> lower;
 	vector<int> upper;
 	//TEST
-	if (currentd == 0)
-	{
+	// if (currentd == 0)
+	// {
 		SplitList(lower, upper, currentValues, currentValuesSize, pivot);		
-	}
+	// }
 
 	//VERIF ONLY:
 	int l = 0;
-	if (mpiRank == 0)
+	if (mpiRank == 0 && currentd == 0)
 	{
+		cout << "SEPARATED INTO: --------" << endl;
 		while (l < lower.size())
 		{
 			cout << lower[l] << endl;
@@ -238,7 +248,6 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 	}
 	
 	//STEP5: Echange data with neighbour
-	
 	int power = pow(2, currentd);
 	int destId = mpiRank ^ power;
 	int maxSize = arraySize/p +1;
@@ -247,15 +256,65 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 	
 	MPI_Request sendRequest;
 	MPI_Request recvRequest;
-	
-	int* toSend = mpiRank & (1<<i)
+	MPI_Status status;
+
+	bool isUpperKeeper = mpiRank & (1<<i);
+	int* toSend = isUpperKeeper
 		? &lower[0]
 		: &upper[0];
 	
-	cout << "dimension: " << currentd << " rank: " << mpiRank << " send to destId: " << destId << endl;
+	// cout << "dimension: " << currentd << " rank: " << mpiRank << " send to destId: " << destId << endl;
 	MPI_Isend(toSend, lower.size(), MPI_INT, destId, 0, MPI_COMM_HYPERCUBE, &sendRequest);
 	MPI_Irecv(&received[0], maxSize, MPI_INT, destId, 0, MPI_COMM_HYPERCUBE, &recvRequest);
-	cout << "rank: " << mpiRank << " receive from destId: " << destId << endl;
+	// cout << "rank: " << mpiRank << " receive from destId: " << destId << endl;
+	
+	int receivedSize;
+	MPI_Wait(&recvRequest, &status);
+	MPI_Get_count( &status, MPI_INT, &receivedSize );
+	
+	
+	// //VERIF ONLY:
+// 	int m = 0;
+// 	if (mpiRank == 0 && currentd == 0)
+// 	{
+// 		cout << "RECEIVED values: --------" << endl;
+// 		while (m < receivedSize)
+// 		{
+// 			cout << received[m] << endl;
+// 			++m;
+// 		}
+// 		cout << "END OF RECEIVED values: --------" << endl;
+// 	}
+	
+	//STEP6: merge data kept with data received
+	if (isUpperKeeper)
+	{
+		PushArrayToVector(upper, received, receivedSize);
+	}
+	else
+	{
+		PushArrayToVector(lower, received, receivedSize);
+	}
+	
+	if (mpiRank == 0 && currentd == 0)
+	{
+		cout << "MPI_get_count: " << receivedSize << endl;
+		cout << "MERGED values: --------" << endl;
+		int m = 0;
+		int size = isUpperKeeper
+			? upper.size()
+			: lower.size();
+		
+		while (m < size)
+		{
+			int result = isUpperKeeper
+			? upper[m]
+			: lower[m];
+			cout << result << endl;
+			++m;
+		}
+		cout << "END OF MERGED values: --------" << endl;
+	}
 
 	//exit and restart
 	
