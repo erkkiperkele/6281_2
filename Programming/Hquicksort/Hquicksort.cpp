@@ -21,7 +21,7 @@ int* HyperQSort(int currentd, int *currentValues);
 void SplitList(vector<int> &lower, vector<int> &upper, int* valueSet, int valueSetSize, int pivot);
 
 //outputs
-void Print(vector<int>& values);
+void Print(int* values, int valuesSize);
 void PrintChrono(int &nodes, size_t qty, double &duration);
 
 //communicator(s)
@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
 	MPI_Comm_rank(MPI_COMM_HYPERCUBE, &mpiRank);
 	MPI_Comm_size(MPI_COMM_HYPERCUBE, &mpiSize);
 	
-	//STEP1: Read input
+	//STEP1: Master read input
 	if (mpiRank == 0)
 	{
 		values = LoadFromFile();
@@ -113,14 +113,6 @@ int main(int argc, char* argv[])
 	recvCount = sendCounts[mpiRank];
 	int recvValues[recvCount];
 	MPI_Scatterv(&values[0], sendCounts, displs, MPI_INT, recvValues , recvCount, MPI_INT, 0, MPI_COMM_HYPERCUBE);
-	
-	// //TOREMOVE: checking values. That's all.
-	// int j = 0;
-	// while (j < recvCount)
-	// {
-	// 	cout << "rank " << mpiRank << " received: " << recvValues[j] << endl;
-	// 	++j;
-	// }
 			
 	//STEP3: Compare and exchange
 	int currentd = 0;
@@ -134,37 +126,13 @@ int main(int argc, char* argv[])
 		++currentd;
 	}
 	
-	//STEP8: Gather results
+	//STEP4: Gather results
 	int resultSizes[p];
 	int finalResults[arraySize];
 	int receive_displacements[p];
 	
-
-	
-	// int MPI_Gather(
-// 	  void *sendbuf,
-// 	  int sendcnt,
-// 	  MPI_Datatype sendtype,
-// 	  void *recvbuf,
-// 	  int recvcnt,
-// 	  MPI_Datatype recvtype,
-// 	  int root,
-// 	  MPI_Comm comm
-// 	);
-	  
-	 	MPI_Barrier(MPI_COMM_HYPERCUBE);
+	//Get each process result size
 	MPI_Gather(&currentValuesSize, 1, MPI_INT, resultSizes , 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
-	
-	if (mpiRank == 0)
-	{
-	i = 0;
-	while (i < p)
-	{
-		cout << "FINAL SIZES: " << resultSizes[i] << endl;
-		++i;
-	}
-	}
-
 	
 	i = 0;
 	k = 0;
@@ -177,39 +145,18 @@ int main(int argc, char* argv[])
 		++i;
 	}
 
-	if (mpiRank == 0)
-	{
-	int i = 0;
-	while (i < p)
-	{
-		cout << "receive_displacements: " << receive_displacements[i] << endl;
-		++i;
-	}
-	}
-
+	//Concatenate data in proper order since each process result size is known.
 	MPI_Gatherv(&toSend[0], currentValuesSize, MPI_INT, &finalResults[0], &resultSizes[0], receive_displacements, MPI_INT, 0, MPI_COMM_HYPERCUBE);
-	 
-	 // int MPI_Gatherv(int *sendbuf, int sendcnt, MPI_Datatype sendtype, void *recvbuf, int *recvcnts,
-	 //   int *displs, MPI_Datatype recvtype, int root, MPI_Comm comm);
-	
-
 
 	if (mpiRank == 0)
-	{
-		int i = 0;
-		while (i < arraySize)
-		{
-			cout << "finalResults: " << finalResults[i] << endl;
-			++i;
-		}
-		
-		//STEPX: Stop chrono and print results
+	{	
+		//STEP5: Stop chrono and print results
 		double endTime = MPI_Wtime();
 		double duration = endTime - startTime;
 
 		cout << values.size() << " numbers (quick)sorted" << endl;
 		cout << "Duration: " << duration << " seconds" << endl;
-		Print(values);
+		Print(finalResults, currentValuesSize);
 		PrintChrono(mpiSize, values.size(), duration);
 	}
 
@@ -220,18 +167,7 @@ int main(int argc, char* argv[])
 //TODO: Implement properly: far too ugly!
 vector<int> GetGroup(int currentd)
 {
-	// vector<int> group;
-	// int step = p / pow(2,currentd);
-	//
-	// int size = mpiRank / step;
-	// int start = step * size;
-	// int end = start + step;
-	// while (start < end)
-	// {
-	// 	group.push_back(start);
-	// 	++start;
-	// }
-	
+
 	if (currentd == 0)
 	{
 		static const int arr[] = {0,1,2,3,4,5,6,7};
@@ -289,69 +225,38 @@ vector<int> GetGroup(int currentd)
 void PushArrayToVector(vector<int> &toExtend, int* received, int receivedSize)
 {
 	int i = 0;
-	// if (mpiRank == 0)
-	// {
-		// cout << "before size: " <<toExtend.size() << endl;
-		// cout << "before receivedSize: " <<receivedSize << endl;
-	// }
-		
 	while (i < receivedSize)
 	{
 		toExtend.push_back(received[i]);
 		++i;
 	}
-	// if (mpiRank == 0)
-	// {
-		// cout << "before size: " <<toExtend.size() << endl;
-		// cout << "before receivedSize: " <<receivedSize << endl;
-	// }
 }
 
 int* HyperQSort(int currentd, int* toSort)
 {
-	// if (mpiRank == 0 || mpiRank == 4 || mpiRank == 2 || mpiRank == 6)
-// 	{
-// 		cout << currentd << " -- zzz receiving toSort address (" << mpiRank << "): " << &toSort[0] << endl;
-// 		cout << currentd << "-- zzz receiving toSort[0] (" << mpiRank << "): " << toSort[0] << endl;
-// 	}
-
-	cout << currentd << " -- aaa rank: " << mpiRank << " toSortSize: " << currentValuesSize << endl;	
-	//STEP3: Select pivot and Broadcast	
+	//STEP A: Select pivot and Broadcast	
 	vector<int> myGroup = GetGroup(currentd);
 	int broadcaster = myGroup[0];
-	if (mpiRank == 5)
-		cout << currentd << " -- ooo rank5 - broadcaster: " << broadcaster << endl;
-
 	int sendSize = (p / (pow(2,currentd)));		//Send pivot to n processes
 
 	//Check every bit to determine the broadcaster. 
 	//(Ex: 000 has none of its 3 bits set, and is broadcaster of dimension 0)
 	//(Ex: 100 has none of its 2 last bits set and is broadcaster of dimension 3-1 = 2) etc...
-	bool isBroadcaster = true;
-	int i = 0;
-	while ((i < d - currentd) && isBroadcaster)
-	{
-		if ((mpiRank & (1<<i)))
-		{
-			isBroadcaster = false;
-		}
-		++i;
-	}
+	// bool isBroadcaster = true;
+// 	int i = 0;
+// 	while ((i < d - currentd) && isBroadcaster)
+// 	{
+// 		if ((mpiRank & (1<<i)))
+// 		{
+// 			isBroadcaster = false;
+// 		}
+// 		++i;
+// 	}
 	
 	//TODO: fallback broadcaster!!
-	// if(isBroadcaster)
 	if (broadcaster == mpiRank)
 	{
 		pivot = toSort[currentValuesSize-1];
-		// pivot = toSort[1];
-		// pivot = (toSort[0] + toSort[1]) / 2;
-		// if (mpiRank == 0 || mpiRank == 4)
-		// {
-			// cout << currentd << " -- zzz toSort[0] pivot (" << mpiRank << ")= " << toSort[0] << endl;
-			// cout << "currentValuesSize (" << mpiRank << ")= " << currentValuesSize << endl;
-			// cout << "toSort address (" << mpiRank << ")= " << &toSort[0] << endl;
-			
-		// }
 
 		int i = 0;
 		while(i < sendSize)
@@ -359,10 +264,6 @@ int* HyperQSort(int currentd, int* toSort)
 			if (myGroup[i] != mpiRank)
 			{
 				int receiver = myGroup[i];
-				cout << currentd << " -- zzz rank: " << mpiRank << " send pivot " << pivot << " to: " << receiver << endl;
-				cout << currentd << " -- zzz rank: " << mpiRank 
-					<< " pivot - toSort[0] " << toSort[0] << " toSort[currentValuesSize-1] " << toSort[currentValuesSize-1]  
-					<< " pivot " << pivot << endl;
 				MPI_Send(&pivot, 1, MPI_INT, receiver, 0, MPI_COMM_HYPERCUBE);
 			}
 			++i;	
@@ -373,39 +274,10 @@ int* HyperQSort(int currentd, int* toSort)
 	{
 		MPI_Recv(&pivot, 1, MPI_INT, broadcaster, 0, MPI_COMM_HYPERCUBE, MPI_STATUS_IGNORE);	
 	}
-	// cout << currentd << " -- zzz rank: " << mpiRank << " received pivot: " << pivot << endl;
 
-	
-	//STEP4: Split values in 2
-	// vector<int> lower;
-	// vector<int> upper;
-	//TEST
-	// if (currentd == 0)
-	// {
 	SplitList(lower, upper, toSort, currentValuesSize, pivot);		
-	cout << currentd << " -- yyy rank: " << mpiRank << " lowerSize + upperSize: " << lower.size() + upper.size() << endl;	
-	// }
-
-	//VERIF ONLY:
-	// int l = 0;
-	// if (mpiRank == 0 && currentd == 0)
-	// {
-	// 	cout << "SEPARATED INTO: --------" << endl;
-	// 	while (l < lower.size())
-	// 	{
-	// 		cout << lower[l] << endl;
-	// 		++l;
-	// 	}
-	// 	cout << "upper than: " << pivot << endl;
-	// 	int u = 0;
-	// 	while (u < upper.size())
-	// 	{
-	// 		cout << upper[u] << endl;
-	// 		++u;
-	// 	}
-	// }
 	
-	//STEP5: Echange data with neighbour
+	//STEP B: Echange data with neighbour
 	int power = pow(2, currentd);
 	int destId = mpiRank ^ power;
 	int maxSize = arraySize; // / p +1;
@@ -425,76 +297,27 @@ int* HyperQSort(int currentd, int* toSort)
 		? lower.size()
 		: upper.size();
 	
-	int keepSize = !isUpperKeeper
-		? lower.size()
-		: upper.size();
-	
-	cout << currentd << " -- bbb rank: " << mpiRank << " send to: " << destId << " toSendSize " << toSendSize << endl;
 	MPI_Isend(toSend, toSendSize, MPI_INT, destId, 0, MPI_COMM_HYPERCUBE, &sendRequest);
 	MPI_Irecv(&received[0], maxSize, MPI_INT, destId, 0, MPI_COMM_HYPERCUBE, &recvRequest);
-	cout << currentd << " -- ccc rank: " << mpiRank << " receive from destId: " << destId <<  endl;
 	
 	int receivedSize = 0;
 	MPI_Wait(&recvRequest, &status);
 	MPI_Get_count( &status, MPI_INT, &receivedSize );
-	cout << currentd << " -- ddd rank: " << mpiRank << " got Count: " << receivedSize << endl;	
-	cout << currentd << " -- ddd rank: " << mpiRank << " totalSize " << keepSize + receivedSize << endl;
 	
-	// //VERIF ONLY:
-	// int m = 0;
-	// if (mpiRank == 0 && currentd == 0)
-	// {
-	// 	cout << "RECEIVED values: --------" << endl;
-	// 	while (m < receivedSize)
-	// 	{
-	// 		cout << received[m] << endl;
-	// 		++m;
-	// 	}
-	// 	cout << "END OF RECEIVED values: --------" << endl;
-	// }
-	
-	//STEP6: merge data kept with data received
+	//STEPC: merge data kept with data received
 	if (isUpperKeeper)
 	{
-		// if (mpiRank == 0) 
-			// cout << "push uppersize" << upper.size() << endl;
 		PushArrayToVector(upper, received, receivedSize);
 	}
 	else
 	{
-		// if (mpiRank == 0)
-			// cout << "push lowersize" << lower.size() << endl;
 		PushArrayToVector(lower, received, receivedSize);
-		// if (mpiRank == 0)
-			// cout << "--------------- 0 IS LOWER KEEPER!!! --------------" << endl;
 	}
 	
-	//STEP7: Serial quickSort on last dimension
+	//STEPD: Serial quickSort on last dimension
 	if (currentd == d-1)
 	{
 		quicksort(isUpperKeeper ? upper	: lower);
-	}
-	
-	// if (mpiRank < 3 && currentd == 0)
-	if (currentd == 2)
-	{
-		cout << endl <<"MPI_get_count: " << receivedSize << endl;
-		cout << "destId :" << destId << endl;
-		cout << "MERGED values (" << mpiRank << ")--------" << endl;
-		int m = 0;
-		int size = isUpperKeeper
-			? upper.size()
-			: lower.size();
-
-		while (m < size)
-		{
-			int result = isUpperKeeper
-			? upper[m]
-			: lower[m];
-			cout << "yyy " << result << endl;
-			++m;
-		}
-		cout << "END OF MERGED values: --------" << endl;
 	}
 
 	toSort = isUpperKeeper
@@ -504,34 +327,8 @@ int* HyperQSort(int currentd, int* toSort)
 			? upper.size()
 			: lower.size();
 	
-	
-	
-	// if (mpiRank == 0 || mpiRank == 4 || mpiRank ==2 || mpiRank == 6)
-	// {
-	// 	cout << "DIMENSION " << currentd << " toSort currentValuesSize (" << mpiRank << ") " << currentValuesSize << endl;
-	// 	cout << "DIMENSION " << currentd << " toSort sent (" << mpiRank << ") " << upper[0] << endl;
-	// 	cout << "DIMENSION " << currentd << " toSort sent size (" << mpiRank << ") " << upper.size() << endl;
-	// 	cout << "DIMENSION " << currentd << " toSort[0] (" << mpiRank << ") " << toSort[0] << endl;
-	// 	cout << "DIMENSION " << currentd << " toSort[0] address (" << mpiRank << ") " << &toSort[0] << endl;
-	// }
-		
-
-	//ALMOST THERE! Just need my groups to be right! At the moment, they don't share properly
-	//exit and restart
-	
-	
-	
-	
-	//shall I create groups per dimensions? (1024 proc. is 10 groups only)
-	//pivot should be sent by lowest id of the group. p0 to all, then to 3, then to 1. (don't send to himself)
-	//first time to all, 
-	//then to ones with same most significant bit, 
-	//then to one with same most significant 2 bits, etc....
+	//Make sure every process is done before starting on next dimension
 	MPI_Barrier(MPI_COMM_HYPERCUBE);
-	cout << currentd << " -- eee rank: " << mpiRank << " valueSize (end of loop): " << currentValuesSize << endl;
-	
-	
-	
 	return toSort;
 }
 
@@ -566,7 +363,6 @@ void SplitList(vector<int> &lower, vector<int> &upper, int* valueSet, int valueS
 	upper.clear();
 	while (i < valueSetSize)
 	{
-		// cout << "value compared to " << valueSet[i] << endl;
 		bool isLower = valueSet[i] <= pivot;
 		if (isLower)
 		{
@@ -613,13 +409,13 @@ int compare(const void * a, const void * b)
 	return (*(int*)a - *(int*)b);
 }
 
-void Print(vector<int>& values)
+void Print(int* values, int valuesSize)
 {
 	std::ofstream myfile;
 	myfile.open("./output.txt");
 
 	int i = 0;
-	while (i < values.size())
+	while (i < valuesSize)
 	{
 		myfile << values[i] << endl;
 		++i;
