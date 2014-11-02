@@ -223,8 +223,8 @@ int* HyperQSort(int currentd, int* toSort)
 		++i;
 	}
 	
-	// if(isBroadcaster)
-	if (myGroup[0] == mpiRank)
+	//TODO: fallback broadcaster!!
+	if(isBroadcaster)
 	{
 		pivot = toSort[1];
 		if (mpiRank == 0 || mpiRank == 4)
@@ -235,12 +235,15 @@ int* HyperQSort(int currentd, int* toSort)
 			
 		}
 		// pivot = (currentValues[0] + currentValues[currentValuesSize-1]) / 2;
-		int i = 1;
+		int i = 0;
 		while(i < sendSize)
 		{
-			int receiver = myGroup[i];
-			MPI_Send(&pivot, 1, MPI_INT, receiver, 0, MPI_COMM_HYPERCUBE);
-			++i;
+			if (myGroup[i] != mpiRank)
+			{
+				int receiver = myGroup[i];
+				MPI_Send(&pivot, 1, MPI_INT, receiver, 0, MPI_COMM_HYPERCUBE);
+				++i;				
+			}
 		}	
 	}
 	
@@ -363,7 +366,7 @@ int* HyperQSort(int currentd, int* toSort)
 			? upper.size()
 			: lower.size();
 	
-	if (mpiRank == 0 || mpiRank == 4)
+	if (mpiRank == 0 || mpiRank == 4 || mpiRank ==2 || mpiRank == 6)
 	{
 		cout << "DIMENSION " << currentd << " toSort currentValuesSize (" << mpiRank << ") " << currentValuesSize << endl; 
 		cout << "DIMENSION " << currentd << " toSort sent (" << mpiRank << ") " << upper[0] << endl;
