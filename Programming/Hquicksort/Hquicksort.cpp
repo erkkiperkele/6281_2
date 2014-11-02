@@ -17,7 +17,7 @@ void quicksort(vector<int>& values);
 int compare(const void * a, const void * b);
 
 //Hquicksort
-void HyperQSort(int currentd, int* currentValues, int currentValuesSize);
+int* HyperQSort(int currentd, int *currentValues);
 void SplitList(vector<int> &lower, vector<int> &upper, int* valueSet, int valueSetSize, int pivot);
 
 //outputs
@@ -43,6 +43,10 @@ int arraySize;
 int pivot;
 int* currentValues;
 int currentValuesSize;
+
+int* toSend;
+vector<int> lower;
+vector<int> upper;
 
 //TODO:
 //Use ScatterV
@@ -128,9 +132,11 @@ int main(int argc, char* argv[])
 	// int sortingArray[arraySize];
 	currentValues = &recvValues[0];
 	currentValuesSize = recvCount;
+	
+	toSend = currentValues;
 	while (currentd < d)
 	{
-		HyperQSort(currentd, currentValues, currentValuesSize);
+		toSend = HyperQSort(currentd, &toSend[0]);
 		++currentd;
 	}
 
@@ -171,15 +177,32 @@ vector<int> GetGroup(int currentd)
 void PushArrayToVector(vector<int> &toExtend, int* received, int receivedSize)
 {
 	int i = 0;
+	if (mpiRank == 0)
+	{
+		cout << "before size: " <<toExtend.size() << endl;
+		cout << "before receivedSize: " <<receivedSize << endl;
+	}
+		
 	while (i < receivedSize)
 	{
 		toExtend.push_back(received[i]);
 		++i;
 	}
+	if (mpiRank == 0)
+	{
+		cout << "before size: " <<toExtend.size() << endl;
+		cout << "before receivedSize: " <<receivedSize << endl;
+	}
 }
 
-void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
+int* HyperQSort(int currentd, int* toSort)
 {
+	if (mpiRank == 0 || mpiRank == 4)
+	{
+		cout << "receiving toSort address (" << mpiRank << "): " << &toSort[0] << endl;		
+		cout << "receiving toSort (" << mpiRank << "): " << toSort[0] << endl;		
+	}
+
 	//STEP3: Select pivot and Broadcast	
 	vector<int> myGroup = GetGroup(currentd);
 	int broadcaster = myGroup[0];
@@ -200,9 +223,18 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 		++i;
 	}
 	
-	if(isBroadcaster)
+	// if(isBroadcaster)
+	if (myGroup[0] == mpiRank)
 	{
-		pivot = (currentValues[0] + currentValues[currentValuesSize-1]) / 2;
+		pivot = toSort[1];
+		if (mpiRank == 0 || mpiRank == 4)
+		{
+			cout << "toSort[0] pivot (" << mpiRank << ")= " << toSort[0] << endl;
+			cout << "currentValuesSize (" << mpiRank << ")= " << currentValuesSize << endl;
+			cout << "toSort address (" << mpiRank << ")= " << &toSort[0] << endl;
+			
+		}
+		// pivot = (currentValues[0] + currentValues[currentValuesSize-1]) / 2;
 		int i = 1;
 		while(i < sendSize)
 		{
@@ -220,32 +252,32 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 
 	
 	//STEP4: Split values in 2
-	vector<int> lower;
-	vector<int> upper;
+	// vector<int> lower;
+	// vector<int> upper;
 	//TEST
 	// if (currentd == 0)
 	// {
-		SplitList(lower, upper, currentValues, currentValuesSize, pivot);		
+		SplitList(lower, upper, toSort, currentValuesSize, pivot);		
 	// }
 
 	//VERIF ONLY:
-	int l = 0;
-	if (mpiRank == 0 && currentd == 0)
-	{
-		cout << "SEPARATED INTO: --------" << endl;
-		while (l < lower.size())
-		{
-			cout << lower[l] << endl;
-			++l;
-		}
-		cout << "upper than: " << pivot << endl;
-		int u = 0;
-		while (u < upper.size())
-		{
-			cout << upper[u] << endl;
-			++u;
-		}
-	}
+	// int l = 0;
+	// if (mpiRank == 0 && currentd == 0)
+	// {
+	// 	cout << "SEPARATED INTO: --------" << endl;
+	// 	while (l < lower.size())
+	// 	{
+	// 		cout << lower[l] << endl;
+	// 		++l;
+	// 	}
+	// 	cout << "upper than: " << pivot << endl;
+	// 	int u = 0;
+	// 	while (u < upper.size())
+	// 	{
+	// 		cout << upper[u] << endl;
+	// 		++u;
+	// 	}
+	// }
 	
 	//STEP5: Echange data with neighbour
 	int power = pow(2, currentd);
@@ -263,7 +295,7 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 		? &lower[0]
 		: &upper[0];
 	
-	// cout << "dimension: " << currentd << " rank: " << mpiRank << " send to destId: " << destId << endl;
+	cout << "dimension: " << currentd << " rank: " << mpiRank << " send to destId: " << destId << endl;
 	MPI_Isend(toSend, lower.size(), MPI_INT, destId, 0, MPI_COMM_HYPERCUBE, &sendRequest);
 	MPI_Irecv(&received[0], maxSize, MPI_INT, destId, 0, MPI_COMM_HYPERCUBE, &recvRequest);
 	// cout << "rank: " << mpiRank << " receive from destId: " << destId << endl;
@@ -273,27 +305,33 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 	MPI_Get_count( &status, MPI_INT, &receivedSize );
 	
 	
-	//VERIF ONLY:
-	int m = 0;
-	if (mpiRank == 0 && currentd == 0)
-	{
-		cout << "RECEIVED values: --------" << endl;
-		while (m < receivedSize)
-		{
-			cout << received[m] << endl;
-			++m;
-		}
-		cout << "END OF RECEIVED values: --------" << endl;
-	}
+	// //VERIF ONLY:
+	// int m = 0;
+	// if (mpiRank == 0 && currentd == 0)
+	// {
+	// 	cout << "RECEIVED values: --------" << endl;
+	// 	while (m < receivedSize)
+	// 	{
+	// 		cout << received[m] << endl;
+	// 		++m;
+	// 	}
+	// 	cout << "END OF RECEIVED values: --------" << endl;
+	// }
 	
 	//STEP6: merge data kept with data received
 	if (isUpperKeeper)
 	{
+		if (mpiRank == 0)
+			cout << "push uppersize" << upper.size() << endl;
 		PushArrayToVector(upper, received, receivedSize);
 	}
 	else
 	{
+		if (mpiRank == 0)
+			cout << "push lowersize" << lower.size() << endl;
 		PushArrayToVector(lower, received, receivedSize);
+		if (mpiRank == 0)
+			cout << "--------------- 0 IS LOWER KEEPER!!! --------------" << endl; 
 	}
 	
 	// if (mpiRank < 3 && currentd == 0)
@@ -312,20 +350,29 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 			int result = isUpperKeeper
 			? upper[m]
 			: lower[m];
-			cout << result << endl;
+			cout << "yyy " << result << endl;
 			++m;
 		}
 		cout << "END OF MERGED values: --------" << endl;
 	}
 
-	currentValues = isUpperKeeper
+	toSort = isUpperKeeper
 			? &upper[0]
 			: &lower[0];
 	currentValuesSize = isUpperKeeper
 			? upper.size()
 			: lower.size();
 	
-	
+	if (mpiRank == 0 || mpiRank == 4)
+	{
+		cout << "DIMENSION " << currentd << " toSort currentValuesSize (" << mpiRank << ") " << currentValuesSize << endl; 
+		cout << "DIMENSION " << currentd << " toSort sent (" << mpiRank << ") " << upper[0] << endl;
+		cout << "DIMENSION " << currentd << " toSort sent size (" << mpiRank << ") " << upper.size() << endl; 
+		cout << "DIMENSION " << currentd << " toSort[0] (" << mpiRank << ") " << toSort[0] << endl; 
+		cout << "DIMENSION " << currentd << " toSort[0] address (" << mpiRank << ") " << &toSort[0] << endl; 
+	}
+		
+
 	//ALMOST THERE! Just need my groups to be right! At the moment, they don't share properly
 	//exit and restart
 	
@@ -338,6 +385,7 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 	//then to ones with same most significant bit, 
 	//then to one with same most significant 2 bits, etc....
 	MPI_Barrier(MPI_COMM_HYPERCUBE);
+	return toSort;
 }
 
 void HypercubeInit(int toExclude[])
@@ -366,16 +414,13 @@ void HypercubeInit(int toExclude[])
 
 void SplitList(vector<int> &lower, vector<int> &upper, int* valueSet, int valueSetSize, int pivot)
 {
-	// cout << "valueSetSize " << valueSetSize << endl;
-	// cout << "pivot " << pivot << endl;
 	int i = 0;
 	while (i < valueSetSize)
 	{
 		// cout << "value compared to " << valueSet[i] << endl;
-		bool isLower = valueSet[i] < pivot;
+		bool isLower = valueSet[i] <= pivot;
 		if (isLower)
 		{
-			// cout << "lower receives " << valueSet[i] << endl;
 			lower.push_back(valueSet[i]);
 		}
 		else
@@ -384,8 +429,6 @@ void SplitList(vector<int> &lower, vector<int> &upper, int* valueSet, int valueS
 		}
 		++i;
 	}
-	//DO Something with it...
-	//More elegant way to do it...
 }
 
 
