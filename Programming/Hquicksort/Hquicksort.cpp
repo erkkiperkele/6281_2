@@ -216,7 +216,7 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 	{
 		MPI_Recv(&pivot, 1, MPI_INT, broadcaster, 0, MPI_COMM_HYPERCUBE, MPI_STATUS_IGNORE);	
 	}
-	// cout << "rank " << mpiRank << " receive pivot " << pivot << " from: " << broadcaster << endl;
+	cout << "rank " << mpiRank << " receive pivot " << pivot << " from: " << broadcaster << endl;
 
 	
 	//STEP4: Split values in 2
@@ -296,11 +296,12 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 		PushArrayToVector(lower, received, receivedSize);
 	}
 	
-	if (mpiRank == 0 && currentd == 0)
+	// if (mpiRank < 3 && currentd == 0)
+	if (currentd == 2)
 	{
 		cout << endl <<"MPI_get_count: " << receivedSize << endl;
 		cout << "destId :" << destId << endl;
-		cout << "MERGED values: --------" << endl;
+		cout << "MERGED values (" << mpiRank << ")--------" << endl;
 		int m = 0;
 		int size = isUpperKeeper
 			? upper.size()
@@ -317,6 +318,15 @@ void HyperQSort(int currentd, int* currentValues, int currentValuesSize)
 		cout << "END OF MERGED values: --------" << endl;
 	}
 
+	currentValues = isUpperKeeper
+			? &upper[0]
+			: &lower[0];
+	currentValuesSize = isUpperKeeper
+			? upper.size()
+			: lower.size();
+	
+	
+	//ALMOST THERE! Just need my groups to be right! At the moment, they don't share properly
 	//exit and restart
 	
 	
