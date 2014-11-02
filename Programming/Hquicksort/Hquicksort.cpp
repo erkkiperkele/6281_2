@@ -151,7 +151,7 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-//TODO: Implement properly!
+//TODO: Implement properly: far too ugly!
 vector<int> GetGroup(int currentd)
 {
 	// vector<int> group;
@@ -403,6 +403,12 @@ int* HyperQSort(int currentd, int* toSort)
 			// cout << "--------------- 0 IS LOWER KEEPER!!! --------------" << endl;
 	}
 	
+	//STEP7: Serial quickSort on last dimension
+	if (currentd == d-1)
+	{
+		quicksort(isUpperKeeper ? upper	: lower);
+	}
+	
 	// if (mpiRank < 3 && currentd == 0)
 	if (currentd == 2)
 	{
@@ -457,6 +463,9 @@ int* HyperQSort(int currentd, int* toSort)
 	//then to one with same most significant 2 bits, etc....
 	MPI_Barrier(MPI_COMM_HYPERCUBE);
 	cout << currentd << " -- eee rank: " << mpiRank << " valueSize (end of loop): " << currentValuesSize << endl;
+	
+	
+	
 	return toSort;
 }
 
