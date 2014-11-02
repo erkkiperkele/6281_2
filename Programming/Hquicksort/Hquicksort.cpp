@@ -3,7 +3,6 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
-#include <chrono>
 #include <mpi.h>
 #include <cmath>
 
@@ -75,7 +74,7 @@ int main(int argc, char* argv[])
 	
 	HypercubeInit(toExclude);
 	
-	//Abort any processor not part of the hypercube.	
+	//Abort any processor not part of the hypercube (better way to do it).	
 	if (mpiWorldRank >= p)
 	{
 		cout << "aborting: " << mpiWorldRank <<endl;
@@ -164,7 +163,7 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-//TODO: Implement properly: far too ugly!
+//TODO: to implement properly...
 vector<int> GetGroup(int currentd)
 {
 
@@ -218,8 +217,8 @@ vector<int> GetGroup(int currentd)
 			return group;
 		}
 	}
-	
-	// return group;
+    vector<int> group;
+	 return group;
 }
 
 void PushArrayToVector(vector<int> &toExtend, int* received, int receivedSize)
@@ -238,20 +237,6 @@ int* HyperQSort(int currentd, int* toSort)
 	vector<int> myGroup = GetGroup(currentd);
 	int broadcaster = myGroup[0];
 	int sendSize = (p / (pow(2,currentd)));		//Send pivot to n processes
-
-	//Check every bit to determine the broadcaster. 
-	//(Ex: 000 has none of its 3 bits set, and is broadcaster of dimension 0)
-	//(Ex: 100 has none of its 2 last bits set and is broadcaster of dimension 3-1 = 2) etc...
-	// bool isBroadcaster = true;
-// 	int i = 0;
-// 	while ((i < d - currentd) && isBroadcaster)
-// 	{
-// 		if ((mpiRank & (1<<i)))
-// 		{
-// 			isBroadcaster = false;
-// 		}
-// 		++i;
-// 	}
 	
 	//TODO: fallback broadcaster!!
 	if (broadcaster == mpiRank)
@@ -375,8 +360,6 @@ void SplitList(vector<int> &lower, vector<int> &upper, int* valueSet, int valueS
 		++i;
 	}
 }
-
-
 
 //Helpers, output and serial operations --------------------------
 
