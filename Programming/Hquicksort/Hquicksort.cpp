@@ -133,10 +133,76 @@ int main(int argc, char* argv[])
 		toSend = HyperQSort(currentd, &toSend[0]);
 		++currentd;
 	}
+	
+	//STEP8: Gather results
+	int resultSizes[p];
+	int finalResults[arraySize];
+	int receive_displacements[p];
+	
 
-	MPI_Barrier(MPI_COMM_HYPERCUBE);
+	
+	// int MPI_Gather(
+// 	  void *sendbuf,
+// 	  int sendcnt,
+// 	  MPI_Datatype sendtype,
+// 	  void *recvbuf,
+// 	  int recvcnt,
+// 	  MPI_Datatype recvtype,
+// 	  int root,
+// 	  MPI_Comm comm
+// 	);
+	  
+	 	MPI_Barrier(MPI_COMM_HYPERCUBE);
+	MPI_Gather(&currentValuesSize, 1, MPI_INT, resultSizes , 1, MPI_INT, 0, MPI_COMM_HYPERCUBE);
+	
 	if (mpiRank == 0)
 	{
+	i = 0;
+	while (i < p)
+	{
+		cout << "FINAL SIZES: " << resultSizes[i] << endl;
+		++i;
+	}
+	}
+
+	
+	i = 0;
+	k = 0;
+	while (i < p)
+	{
+		k += i == 0
+			? 0
+			: resultSizes[i-1];
+		receive_displacements[i] = k;
+		++i;
+	}
+
+	if (mpiRank == 0)
+	{
+	int i = 0;
+	while (i < p)
+	{
+		cout << "receive_displacements: " << receive_displacements[i] << endl;
+		++i;
+	}
+	}
+
+	MPI_Gatherv(&toSend[0], currentValuesSize, MPI_INT, &finalResults[0], &resultSizes[0], receive_displacements, MPI_INT, 0, MPI_COMM_HYPERCUBE);
+	 
+	 // int MPI_Gatherv(int *sendbuf, int sendcnt, MPI_Datatype sendtype, void *recvbuf, int *recvcnts,
+	 //   int *displs, MPI_Datatype recvtype, int root, MPI_Comm comm);
+	
+
+
+	if (mpiRank == 0)
+	{
+		int i = 0;
+		while (i < arraySize)
+		{
+			cout << "finalResults: " << finalResults[i] << endl;
+			++i;
+		}
+		
 		//STEPX: Stop chrono and print results
 		double endTime = MPI_Wtime();
 		double duration = endTime - startTime;
